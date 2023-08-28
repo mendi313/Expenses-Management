@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { collection, addDoc, getDoc, QuerySnapshot, query, onSnapshot, deleteDoc, doc } from 'firebase/firestore';
 import { db } from './firebase';
 import { compareCreatedAt, filterExpensesByMonth, reduceMonth } from '@/utils/utils';
@@ -9,14 +9,12 @@ export default function Home() {
   const [isLoad, setIsLoad] = useState(true);
   const [items, setItems] = useState<expense[]>([]);
   const [filterdItems, setFilterdItems] = useState<expense[]>([]);
-  const [months, setMonth] = useState<string[]>([]);
-  const [selectedMonth, setSelectedMonth] = useState<string>(new Date().toLocaleString('en-US', { month: 'long' }));
-  const [total, setTotal] = useState(
-    filterdItems.reduce((accumulator, currentItem) => {
-      return accumulator + currentItem.price;
-    }, 0)
-  );
+  const [selectedMonth, setSelectedMonth] = useState(new Date().toLocaleString('en-US', { month: 'long' }));
   const [newItem, setNewItem] = useState({ name: '', price: 0 });
+  const total = filterdItems.reduce((accumulator, currentItem) => {
+    return accumulator + currentItem.price;
+  }, 0);
+  const monthsName = reduceMonth(items);
 
   async function addExpense(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -28,35 +26,21 @@ export default function Home() {
       });
       setNewItem({ name: '', price: 0 });
     }
-    filterMonth(items);
   }
 
   async function deleteItem(id: string) {
     await deleteDoc(doc(db, 'items', id));
   }
 
-  function filterMonth(expenses: expense[]) {
-    const filterdMonth = reduceMonth(expenses);
-    setMonth(filterdMonth);
-  }
 
- 
 
-  function calculateTotal(filterdItems: expense[]) {
-    const total = filterdItems.reduce((accumulator, currentItem) => {
-      return accumulator + currentItem.price;
-    }, 0);
-    setTotal(total);
-  }
-
-  function filterExpenses(itemsArr: expense[], monthName?: string) {
+  const filterExpenses = useCallback((itemsArr: expense[], monthName?: string) => {
     if (monthName) setSelectedMonth(monthName);
     const filterdItems = filterExpensesByMonth(itemsArr, monthName || selectedMonth);
-    calculateTotal(filterdItems);
     setFilterdItems(filterdItems);
-  }
+  }, [selectedMonth]);
 
-  useEffect(() => {
+  useEffect(() => {  
     const q = query(collection(db, 'items'));
     const unsubscribe = onSnapshot(q, (QuerySnapshot) => {
       let itemsArr: expense[] = [];
@@ -64,8 +48,6 @@ export default function Home() {
         itemsArr.push({ ...doc.data(), id: doc.id } as expense);
       });
       setItems(itemsArr.sort(compareCreatedAt));
-
-      filterMonth(itemsArr);
       filterExpenses(itemsArr);
       setTimeout(() => {
         setIsLoad(false);
@@ -73,8 +55,7 @@ export default function Home() {
 
       return () => unsubscribe();
     });
-
-  }, []);
+  }, [filterExpenses]);
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-between p-24 bg-slate-800">
@@ -87,7 +68,7 @@ export default function Home() {
             {
               <div className="bg-slate-700 p-2 rounded-lg mt-2">
                 <ul className="flex flex-wrap">
-                  {months.map((month, index) => (
+                  {monthsName.map((month, index) => (
                     <li key={index} className="text-white px-4 py-2">
                       <button
                         className={selectedMonth === month ? 'bg-slate-400 px-2 rounded-lg text-black' : ''}
@@ -109,10 +90,11 @@ export default function Home() {
                 placeholder="enter name"
               />
               <input
-                value={newItem.price}
+                value={newItem.price === 0 ? '' : newItem.price}
                 onChange={(e) => setNewItem({ ...newItem, price: parseInt(e.target.value) })}
                 className="col-span-2 p-3 border mx-1"
                 type="number"
+                min="0"
                 placeholder="enter$"
               />
               <button className="text-white bg-slate-950 p-3 hover:bg-slate-900 text-xl" type="submit">
