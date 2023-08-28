@@ -48,6 +48,7 @@ export default function Home() {
         itemsArr.push({ ...doc.data(), id: doc.id } as expense);
       });
       setItems(itemsArr.sort(compareCreatedAt));
+
       filterExpenses(itemsArr);
       setTimeout(() => {
         setIsLoad(false);
